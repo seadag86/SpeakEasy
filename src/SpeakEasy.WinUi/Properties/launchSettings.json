@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SpeakEasy.WinUi (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "SpeakEasy.WinUi (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

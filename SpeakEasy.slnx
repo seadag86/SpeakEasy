@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/SpeakEasy.WinUi/SpeakEasy.WinUi.csproj" Id="9d3168d3-93d6-4fbd-8d1b-da91ad5d017b">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
+</Solution>

@@ -1,0 +1,167 @@
+# SpeakEasy
+A Guild Wars 2 Text-to-Speech Companion App
+
+## Project Overview
+Build a lightweight, external C#/.NET companion application for Guild Wars 2 that captures in-game text (NPC dialogue, messages, chat) via OCR and converts it to speech using TTS. The app must be non-invasive, ToS-compliant, performant, and easy to install/configure.
+
+## Core Architecture Principles
+
+### 1. External Companion App (NOT Injected Plugin)
+- **CRITICAL**: This is a standalone desktop application, NOT a DLL injection or game client modification
+- Never inject code into `Gw2-64.exe` or modify the game process
+- Operate as a separate Windows process that reads screen content externally
+- Position as an accessibility aid, not a game modification tool
+- Use only screen capture, OCR, and audio playback - no game memory access or automation
+
+### 2. Text Capture Strategy
+- Use **OCR (Optical Character Recognition)** on a bounded screen region containing the chat panel
+- Capture the chat box area periodically (5-15 FPS recommended)
+- Maintain a rolling buffer of recent lines with deduplication
+- Detect new lines by comparing against a hash-based seen set
+- Handle game scaling, resolution changes, and window positioning
+
+### 3. Text-to-Speech Implementation
+- Support both **cloud TTS** (Google TTS, Play.ht, Azure Cognitive Services) and **local TTS** (Windows SAPI)
+- Default to local TTS for zero-latency and offline capability
+- Implement voice selection and configuration
+- Queue TTS requests to prevent audio overlap/spam
+- Apply rate limiting to avoid overwhelming TTS during fast-scrolling chat
+
+### 4. Channel Filtering & Classification
+- Filter text by channel type: NPC dialogue, story messages, party chat, guild chat, map chat, etc.
+- Use color heuristics from GW2 chat panel conventions:
+  - NPC text: darker sea green heading, grey/white text
+  - Story text: specific color patterns
+  - Chat channels: different colors per channel
+- Allow user configuration of which channels to read aloud
+- Provide presets: "NPC & Story Only", "Party/Squad/Guild", "All Chat"
+
+## Technical Implementation Guidelines
+
+### C# / .NET Framework
+- Target **.NET 6+** or **.NET Framework 4.8** (depending on compatibility requirements)
+- Use **WinForms** or **WPF** for the UI (prefer lightweight WinForms for minimal overhead)
+- Implement as a **tray application** with minimal UI footprint
+- Use async/await for all I/O operations (screen capture, OCR, TTS API calls)
+
+### Screen Capture
+- Use `System.Drawing` and Windows API calls for efficient screen region capture
+- Consider libraries like `ScreenCapture.NET` or direct Win32 API via P/Invoke
+- Capture only the chat panel region (configurable coordinates)
+- Handle multi-monitor setups and windowed/fullscreen game modes
+- Optimize capture frequency based on system performance
+
+### OCR Integration
+- Use **Tesseract OCR** via wrapper (e.g., `Tesseract.NET` or `IronOCR`)
+- Pre-process images: contrast enhancement, color filtering, noise reduction
+- Extract text line-by-line with timestamp tracking
+- Implement smart deduplication: hash-based + time-based (ignore duplicates within 2-3 seconds)
+
+### TTS Engine Integration
+- **Local TTS (Primary)**:
+  - Use `System.Speech.Synthesis.SpeechSynthesizer` for Windows SAPI
+  - Support voice selection (Microsoft Zira, David, etc.)
+  - Use `SpeakAsync()` for non-blocking playback
+  - Implement audio queue management
+  
+- **Cloud TTS (Optional)**:
+  - Support Google Cloud TTS, Azure Cognitive Services, or Play.ht
+  - Implement API key management (secure storage)
+  - Handle network failures gracefully (fallback to local TTS)
+  - Cache frequently used phrases if possible
+
+### Performance Optimization
+- Keep memory footprint small (< 100MB ideally)
+- Use efficient data structures (HashSet for deduplication, Queue for TTS)
+- Minimize CPU usage: optimize OCR frequency, use threading appropriately
+- Avoid blocking the UI thread: use BackgroundWorker or Task.Run
+- Implement resource cleanup: dispose of image objects, close file handles
+
+### Configuration & Settings
+- Store settings in JSON or XML config file (user's AppData folder)
+- Configurable options:
+  - Chat region coordinates (with calibration tool)
+  - Enabled channels (checkboxes per channel type)
+  - TTS provider selection (Local/Cloud)
+  - Voice selection and speech rate
+  - Hotkeys (toggle on/off, pause, skip current)
+  - Rate limiting (min time between TTS calls)
+- Provide a simple settings window accessible from system tray
+
+### Installation & Distribution
+- Create a single executable or simple installer
+- No complex dependencies: bundle OCR libraries if needed, or use NuGet packages
+- Auto-detect GW2 installation path (optional, for future enhancements)
+- First-run wizard for initial setup (calibrate chat region, test TTS)
+- Provide clear documentation on ToS compliance
+
+## Code Quality Standards
+
+### Error Handling
+- Gracefully handle OCR failures (bad image quality, no text detected)
+- Handle TTS failures (API errors, network issues) with fallback
+- Log errors to a file for debugging (optional, user-configurable)
+- Never crash the app - catch all exceptions and show user-friendly messages
+
+### Threading & Concurrency
+- Screen capture: dedicated thread or timer
+- OCR processing: background thread/Task
+- TTS playback: async methods, queue-based
+- UI updates: use Invoke/BeginInvoke for thread-safe updates
+- Avoid race conditions with proper locking (lock, SemaphoreSlim, etc.)
+
+### Resource Management
+- Implement IDisposable pattern for all disposable resources
+- Dispose of Bitmap objects immediately after OCR
+- Close file streams properly
+- Release audio resources when stopping TTS
+
+### Code Organization
+- Separate concerns: ScreenCapture, OCRProcessor, TTSManager, ConfigManager
+- Use dependency injection where appropriate
+- Keep classes focused and single-purpose
+- Document public APIs with XML comments
+
+## ToS Compliance & Safety
+
+### What We DO
+- ✅ Read screen content externally (like a screen reader)
+- ✅ Play audio through system audio
+- ✅ Respond to user hotkeys via global keyboard hooks
+- ✅ Store configuration locally
+
+### What We DON'T DO
+- ❌ Inject DLLs into Gw2-64.exe
+- ❌ Modify game memory or files
+- ❌ Send automated inputs (keyboard/mouse)
+- ❌ Intercept network traffic
+- ❌ Automate gameplay in any way
+
+### User Communication
+- Include disclaimer in README about ToS compliance
+- Recommend users verify with ArenaNet support if concerned
+- Position as accessibility/immersion enhancement tool
+- Provide clear instructions for safe usage
+
+## Testing Considerations
+- Test with different screen resolutions and scaling (100%, 125%, 150%)
+- Test in windowed, windowed fullscreen, and fullscreen modes
+- Test with fast-scrolling chat (rate limiting)
+- Test TTS with long messages (queue management)
+- Test error scenarios (network failures, OCR failures)
+- Performance testing: CPU/memory usage during extended play
+
+## Future Enhancements (Optional)
+- Support for multiple languages/voices
+- Custom voice training integration
+- Chat log export functionality
+- Integration with GW2 API for additional context (if available)
+- Plugin architecture for custom filters/processors
+
+## Development Workflow
+- Use Git for version control
+- Keep commits focused and descriptive
+- Test on clean Windows installations
+- Profile performance regularly
+- Document configuration options clearly
+
