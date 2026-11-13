@@ -1,0 +1,34 @@
+name: human-gate
+
+# Risky paths need a human. A human reviews, then adds the 'human-approved' label.
+# New commits remove the label, so each risky change gets a fresh human look.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  human-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+          APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'human-approved') }}
+          RISKY: '^\.github/|(^|/)wrangler\.[^/]+$|(^|/)(drizzle|migrations)/|(^|/)auth(/|\.)'
+        run: |
+          risky=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename' | grep -E "$RISKY" || true)
+          if [ -z "$risky" ]; then echo "No risky paths."; exit 0; fi
+          echo "Risky paths:"; echo "$risky"
+          if [ "$APPROVED" = true ] && [ "$ACTION" = synchronize ]; then
+            gh api -X DELETE "repos/$REPO/issues/$PR/labels/human-approved" >/dev/null
+            APPROVED=false
+          fi
+          if [ "$APPROVED" = true ]; then echo "human-approved label present."; exit 0; fi
+          gh api "repos/$REPO/issues/$PR/labels" -f 'labels[]=needs-human' >/dev/null
+          echo "::error::Risky paths changed. A human must review, then add the 'human-approved' label."
+          exit 1
